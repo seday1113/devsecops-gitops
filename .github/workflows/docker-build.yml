@@ -140,6 +140,21 @@ jobs:
           docker run --rm python:3.13-alpine \
             python -m pip list --format=freeze
 
+      - name: Diagnose Trivy SBOM findings
+        run: |
+          echo "===== SCAN WITHOUT IMAGE SBOM ATTESTATIONS ====="
+
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:0.76.1 \
+            image \
+            --image-config-scanners misconfig \
+            --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 0 \
+            devsecops-gitops:scan
+
       - name: Scan Docker image with Trivy
         uses: aquasecurity/trivy-action@v0.36.0
         with:
