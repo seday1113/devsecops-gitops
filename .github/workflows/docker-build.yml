@@ -155,6 +155,30 @@ jobs:
             --exit-code 0 \
             devsecops-gitops:scan
 
+      - name: Inspect Trivy SBOM package locations
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$PWD:/workspace" \
+            aquasec/trivy:0.76.1 \
+            image \
+            --format cyclonedx \
+            --output /workspace/trivy-sbom.json \
+            devsecops-gitops:scan
+
+          python - <<'PY'
+          import json
+
+          with open("trivy-sbom.json") as f:
+              sbom = json.load(f)
+
+          targets = {"msgpack", "setuptools", "urllib3"}
+
+          for component in sbom.get("components", []):
+              if component.get("name", "").lower() in targets:
+                  print(json.dumps(component, indent=2))
+          PY
+
       - name: Scan Docker image with Trivy
         uses: aquasecurity/trivy-action@v0.36.0
         with:
