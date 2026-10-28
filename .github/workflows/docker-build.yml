@@ -41,6 +41,8 @@ jobs:
           file: ./Dockerfile
           push: false
           load: true
+          provenance: false
+          sbom: false   
           tags: devsecops-gitops:scan
       
       - name: Inspect installed Python packages
@@ -80,6 +82,20 @@ jobs:
                           "pkg_id": vuln.get("PkgID"),
                       })
           PY
+
+      - name: Inspect image SBOM and history
+        run: |
+          docker image inspect devsecops-gitops:scan \
+            --format '{{json .Config.Labels}}'
+
+          docker history --no-trunc devsecops-gitops:scan
+
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:0.76.1 \
+            image --list-all-pkgs devsecops-gitops:scan    
+
+
 
       - name: Scan Docker image with Trivy
         uses: aquasecurity/trivy-action@v0.36.0
