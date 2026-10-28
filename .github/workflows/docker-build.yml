@@ -126,6 +126,30 @@ jobs:
             --exit-code 0 \
             python:3.13-alpine
 
+      - name: Inspect base image SBOM metadata
+        run: |
+          echo "===== DEBIAN IMAGE METADATA ====="
+          docker image inspect python:3.13-slim \
+            --format '{{json .Config.Labels}}'
+
+          echo "===== ALPINE IMAGE METADATA ====="
+          docker image inspect python:3.13-alpine \
+            --format '{{json .Config.Labels}}'
+
+          echo "===== RUNTIME PACKAGES IN ALPINE ====="
+          docker run --rm python:3.13-alpine \
+            python -m pip list --format=freeze
+
+      - name: Scan Docker image with Trivy
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: devsecops-gitops:scan
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: HIGH,CRITICAL  
+
       - name: Scan Docker image with Trivy
         uses: aquasecurity/trivy-action@v0.36.0
         with:
