@@ -1,15 +1,18 @@
+FROM python:3.13-slim AS builder
+
+WORKDIR /build
+
+COPY app/requirements.txt .
+
+RUN python -m pip install --no-cache-dir \
+    --prefix=/install \
+    -r requirements.txt
+
 FROM python:3.13-slim
 
 WORKDIR /app
 
-COPY app/requirements.txt .
-
-RUN python -m pip install --no-cache-dir --upgrade \
-    "setuptools>=78.1.1" \
-    "urllib3>=2.8.0" \
-    "msgpack>=1.2.3" \
-    && python -m pip install --no-cache-dir -r requirements.txt \
-    && python -m pip check
+COPY --from=builder /install /usr/local
 
 COPY app/ .
 
