@@ -201,6 +201,15 @@ jobs:
             devsecops-gitops:scan \
             -c "import importlib.metadata as m; names=['msgpack','setuptools','urllib3']; [(print(n, next((d.version for d in m.distributions() if d.metadata['Name'].lower()==n), 'NOT INSTALLED'))) for n in names]"      
 
+
+      - name: Check vulnerable package filesystem artifacts
+        run: |
+          docker run --rm --entrypoint sh \
+            devsecops-gitops:scan \
+            -c 'find /usr/local/lib/python3.13/site-packages \
+              \( -iname "*msgpack*" -o -iname "*setuptools*" -o -iname "*urllib3*" \) \
+              -print'
+
       - name: Scan Docker image with Trivy
         uses: aquasecurity/trivy-action@v0.36.0
         with:
