@@ -90,12 +90,29 @@ jobs:
 
           docker history --no-trunc devsecops-gitops:scan
 
+              
+
+      - name: Compare base image and application image
+        run: |
+          echo "===== BASE IMAGE SCAN ====="
+          docker pull python:3.13-slim
+
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
             aquasec/trivy:0.76.1 \
-            image --list-all-pkgs devsecops-gitops:scan    
+            image --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --exit-code 0 \
+            python:3.13-slim
 
-
+          echo "===== APPLICATION IMAGE SCAN ====="
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:0.76.1 \
+            image --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --exit-code 0 \
+            devsecops-gitops:scan
 
       - name: Scan Docker image with Trivy
         uses: aquasecurity/trivy-action@v0.36.0
