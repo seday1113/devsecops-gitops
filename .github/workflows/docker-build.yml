@@ -49,7 +49,37 @@ jobs:
             -m pip list --format=freeze
 
           docker run --rm --entrypoint python devsecops-gitops:scan \
-            -m pip check      
+            -m pip check
+
+      - name: Investigate Trivy vulnerability sources
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:0.76.1 \
+            image --format json --exit-code 0 \
+            --severity HIGH,CRITICAL \
+            --scanners vuln \
+            devsecops-gitops:scan > trivy-debug.json
+
+          python - <<'PY'
+          import json
+
+          with open("trivy-debug.json") as f:
+              report = json.load(f)
+
+          for result in report.get("Results", []):
+              for vuln in result.get("Vulnerabilities") or []:
+                  if vuln.get("PkgName") in ("msgpack", "setuptools", "urllib3"):
+                      print({
+                          "target": result.get("Target"),
+                          "package": vuln.get("PkgName"),
+                          "installed": vuln.get("InstalledVersion"),
+                          "fixed": vuln.get("FixedVersion"),
+                          "vulnerability": vuln.get("VulnerabilityID"),
+                          "pkg_path": vuln.get("PkgPath"),
+                          "pkg_id": vuln.get("PkgID"),
+                      })
+          PY
 
       - name: Scan Docker image with Trivy
         uses: aquasecurity/trivy-action@v0.36.0
