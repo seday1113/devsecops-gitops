@@ -1,3 +1,4 @@
+
 name: DevSecOps Docker CI
 
 on:
@@ -42,180 +43,15 @@ jobs:
           push: false
           load: true
           provenance: false
-          sbom: false   
+          sbom: false
           tags: devsecops-gitops:scan
-      
-      - name: Inspect installed Python packages
-        run: |
-          docker run --rm --entrypoint python devsecops-gitops:scan \
-            -m pip list --format=freeze
 
-          docker run --rm --entrypoint python devsecops-gitops:scan \
-            -m pip check
-
-      - name: Investigate Trivy vulnerability sources
-        run: |
-          docker run --rm \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            aquasec/trivy:0.76.1 \
-            image --format json --exit-code 0 \
-            --severity HIGH,CRITICAL \
-            --scanners vuln \
-            devsecops-gitops:scan > trivy-debug.json
-
-          python - <<'PY'
-          import json
-
-          with open("trivy-debug.json") as f:
-              report = json.load(f)
-
-          for result in report.get("Results", []):
-              for vuln in result.get("Vulnerabilities") or []:
-                  if vuln.get("PkgName") in ("msgpack", "setuptools", "urllib3"):
-                      print({
-                          "target": result.get("Target"),
-                          "package": vuln.get("PkgName"),
-                          "installed": vuln.get("InstalledVersion"),
-                          "fixed": vuln.get("FixedVersion"),
-                          "vulnerability": vuln.get("VulnerabilityID"),
-                          "pkg_path": vuln.get("PkgPath"),
-                          "pkg_id": vuln.get("PkgID"),
-                      })
-          PY
-
-      - name: Inspect image SBOM and history
-        run: |
-          docker image inspect devsecops-gitops:scan \
-            --format '{{json .Config.Labels}}'
-
-          docker history --no-trunc devsecops-gitops:scan
-
-              
-
-      - name: Compare base image and application image
-        run: |
-          echo "===== BASE IMAGE SCAN ====="
-          docker pull python:3.13-slim
-
-          docker run --rm \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            aquasec/trivy:0.76.1 \
-            image --scanners vuln \
-            --severity HIGH,CRITICAL \
-            --exit-code 0 \
-            python:3.13-slim
-
-          echo "===== APPLICATION IMAGE SCAN ====="
-          docker run --rm \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            aquasec/trivy:0.76.1 \
-            image --scanners vuln \
-            --severity HIGH,CRITICAL \
-            --exit-code 0 \
-            devsecops-gitops:scan
-
-          echo "===== ALPINE BASE IMAGE SCAN ====="
-          docker pull python:3.13-alpine
-
-          docker run --rm \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            aquasec/trivy:0.76.1 \
-            image --scanners vuln \
-            --severity HIGH,CRITICAL \
-            --ignore-unfixed \
-            --exit-code 0 \
-            python:3.13-alpine
-
-      - name: Inspect base image SBOM metadata
-        run: |
-          echo "===== DEBIAN IMAGE METADATA ====="
-          docker image inspect python:3.13-slim \
-            --format '{{json .Config.Labels}}'
-
-          echo "===== ALPINE IMAGE METADATA ====="
-          docker image inspect python:3.13-alpine \
-            --format '{{json .Config.Labels}}'
-
-          echo "===== RUNTIME PACKAGES IN ALPINE ====="
-          docker run --rm python:3.13-alpine \
-            python -m pip list --format=freeze
-
-      - name: Diagnose Trivy SBOM findings
-        run: |
-          echo "===== SCAN WITHOUT IMAGE SBOM ATTESTATIONS ====="
-
-          docker run --rm \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            aquasec/trivy:0.76.1 \
-            image \
-            --image-config-scanners misconfig \
-            --scanners vuln \
-            --severity HIGH,CRITICAL \
-            --ignore-unfixed \
-            --exit-code 0 \
-            devsecops-gitops:scan
-
-      - name: Inspect Trivy SBOM package locations
-        run: |
-          docker run --rm \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            -v "$PWD:/workspace" \
-            aquasec/trivy:0.76.1 \
-            image \
-            --format cyclonedx \
-            --output /workspace/trivy-sbom.json \
-            devsecops-gitops:scan
-
-          python - <<'PY'
-          import json
-
-          with open("trivy-sbom.json") as f:
-              sbom = json.load(f)
-
-          targets = {"msgpack", "setuptools", "urllib3"}
-
-          for component in sbom.get("components", []):
-              if component.get("name", "").lower() in targets:
-                  print(json.dumps(component, indent=2))
-          PY
-
-      - name: Identify vulnerable package layer
-        run: |
-          echo "===== IMAGE HISTORY ====="
-          docker history --no-trunc devsecops-gitops:scan
-
-          echo "===== IMAGE ROOTFS LAYERS ====="
-          docker image inspect devsecops-gitops:scan \
-            --format '{{json .RootFS.Layers}}'
-
-          echo "===== VERIFY RUNTIME PACKAGES ====="
-          docker run --rm devsecops-gitops:scan \
-            python -m pip list --format=freeze
-
-    
-
-
-      - name: Verify vulnerable package files
+      - name: Verify application runtime
         run: |
           docker run --rm --entrypoint python \
             devsecops-gitops:scan \
-            -c "import importlib.metadata as m; names=['msgpack','setuptools','urllib3']; [(print(n, next((d.version for d in m.distributions() if d.metadata['Name'].lower()==n), 'NOT INSTALLED'))) for n in names]"      
+            -c "import flask, gunicorn; print('Application dependencies OK')"
 
-
-      - name: Check vulnerable package filesystem artifacts
-        run: |
-          docker run --rm --entrypoint sh \
-            devsecops-gitops:scan \
-            -c 'find /usr/local/lib/python3.13/site-packages \
-              \( -iname "*msgpack*" -o -iname "*setuptools*" -o -iname "*urllib3*" \) \
-              -print'
-
-      - name: Verify pip vendored library versions
-        run: |
-          docker run --rm --entrypoint python \
-            devsecops-gitops:scan \
-            -c "import pip._vendor.urllib3 as u; import pip._vendor.msgpack as m; print('urllib3:', u.__version__); print('msgpack:', m.version)"
-              
       - name: Scan Docker image with Trivy
         uses: aquasecurity/trivy-action@v0.36.0
         with:
@@ -239,3 +75,4 @@ jobs:
           docker tag devsecops-gitops:scan ghcr.io/seday1113/devsecops-gitops:latest
           docker push ghcr.io/seday1113/devsecops-gitops:${{ github.sha }}
           docker push ghcr.io/seday1113/devsecops-gitops:latest
+
