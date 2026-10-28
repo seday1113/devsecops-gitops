@@ -179,6 +179,19 @@ jobs:
                   print(json.dumps(component, indent=2))
           PY
 
+      - name: Identify vulnerable package layer
+        run: |
+          echo "===== IMAGE HISTORY ====="
+          docker history --no-trunc devsecops-gitops:scan
+
+          echo "===== IMAGE ROOTFS LAYERS ====="
+          docker image inspect devsecops-gitops:scan \
+            --format '{{json .RootFS.Layers}}'
+
+          echo "===== VERIFY RUNTIME PACKAGES ====="
+          docker run --rm devsecops-gitops:scan \
+            python -m pip list --format=freeze
+
       - name: Scan Docker image with Trivy
         uses: aquasecurity/trivy-action@v0.36.0
         with:
