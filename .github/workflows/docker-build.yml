@@ -210,6 +210,12 @@ jobs:
               \( -iname "*msgpack*" -o -iname "*setuptools*" -o -iname "*urllib3*" \) \
               -print'
 
+      - name: Verify pip vendored library versions
+        run: |
+          docker run --rm --entrypoint python \
+            devsecops-gitops:scan \
+            -c "import pip._vendor.urllib3 as u; import pip._vendor.msgpack as m; print('urllib3:', u.__version__); print('msgpack:', m.version)"
+              
       - name: Scan Docker image with Trivy
         uses: aquasecurity/trivy-action@v0.36.0
         with:
