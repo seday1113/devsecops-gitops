@@ -1,5 +1,5 @@
 
-replicaCount: 3
+replicaCount: 2
 
 image:
   repository: ghcr.io/seday1113/devsecops-gitops
